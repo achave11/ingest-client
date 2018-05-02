@@ -20,7 +20,7 @@ class JsonToIngest:
 
     def submit(self, token, json_file):
         self._create_entities(self._create_submission(token), self._load_json_data(json_file), token)
-        print(str(self.id_to_url_mappings))
+        print(json.dumps(self.id_to_url_mappings, indent=4))
 
     def _create_submission(self, token):
         return self.ingest_api.createSubmission(self._get_bearer_token(token))
@@ -49,9 +49,17 @@ class JsonToIngest:
                         self._store_mapping(entity_type, entry_json, response_json)
 
     def _store_mapping(self, entity_type, entry_json, response_json):
+        ingest_url = response_json['_links']['self']['href']
         if entity_type + "_core" in entry_json:
             entity_json_core = entry_json[entity_type + "_core"]
+            spreadsheet_id = None
             if entity_type + "_id" in entity_json_core:
-                spreadsheet_id = entity_type + ":" + entity_json_core[entity_type + "_id"]
-                ingest_url = response_json['_links']['self']['href']
+                spreadsheet_id = entity_json_core[entity_type + "_id"]
+            elif entity_type + "_name" in entity_json_core:
+                spreadsheet_id = entity_json_core[entity_type + "_name"]
+            elif entity_type + "_shortname" in entity_json_core:
+                spreadsheet_id = entity_json_core[entity_type + "_shortname"]
+            if spreadsheet_id is not None:
                 self.id_to_url_mappings.update({spreadsheet_id: ingest_url})
+            else:
+                print("no id for " + entity_type + "_core")
