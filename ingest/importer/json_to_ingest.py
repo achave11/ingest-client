@@ -12,6 +12,9 @@ class JsonToIngest:
                              "process": "processes",
                              "protocol": "protocols",
                              "file": "files"}
+
+    link_type_endpoints = {"biomaterial": "inputBiomaterials",
+                           "process": "derivedFiles"}
     id_to_url_mappings = {}
 
     def __init__(self, options=None):
@@ -19,8 +22,11 @@ class JsonToIngest:
         self.ingest_api = ingestapi.IngestApi(self.ingestUrl)
 
     def submit(self, token, json_file):
-        self._create_entities(self._create_submission(token), self._load_json_data(json_file), token)
+        submission_url = self._create_submission(token)
+        json_data = self._load_json_data(json_file)
+        self._create_entities(submission_url, json_data, token)
         print(json.dumps(self.id_to_url_mappings, indent=4))
+        self._create_links(json_data)
 
     def _create_submission(self, token):
         return self.ingest_api.createSubmission(self._get_bearer_token(token))
@@ -35,8 +41,8 @@ class JsonToIngest:
     def _get_bearer_token(token):
         return "Bearer " + token
 
-    def _create_entities(self, submission_url, data, token):
-        for entry_set in data:
+    def _create_entities(self, submission_url, json_data, token):
+        for entry_set in json_data:
             if 'schema_type' in entry_set:
                 entity_type = entry_set['schema_type']
                 entity_type_endpoint = self.entity_type_endpoints[entity_type]
@@ -63,3 +69,19 @@ class JsonToIngest:
                 self.id_to_url_mappings.update({spreadsheet_id: ingest_url})
             else:
                 print("no id for " + entity_type + "_core")
+
+    def _create_links(self, json_data):
+        for entry_set in json_data:
+            if 'links' in entry_set:
+                links = entry_set['links']
+                for link in links:
+                    source_type = link['source_type']
+                    source_url = self.id_to_url_mappings[link['source_id']]
+                    if 'destination_ids' in link:
+                        for destination_id in link['destination_ids']:
+                            target_url = self.id_to_url_mappings.get(destination_id)
+                            if target_url is not None:
+                                link_type = self.link_type_endpoints.get(source_type)
+                                if link_type is not None:
+                                    print(target_url, source_url, link_type)
+                                    # self.ingest_api.linkEntity(source_url, target_url, link_type)
