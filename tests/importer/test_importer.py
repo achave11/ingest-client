@@ -12,12 +12,14 @@ from ingest.importer.conversion.data_converter import (
     Converter, ListConverter, BooleanConverter, DataType
 )
 from ingest.importer.data_node import DataNode
-from ingest.importer.importer import WorksheetImporter, WorkbookImporter, IngestImporter
+from ingest.importer.importer import WorksheetImporter, WorkbookImporter, IngestImporter, SubWorksheetImporter, \
+    ProjectWorksheetImporter
 from ingest.importer.spreadsheet.ingest_workbook import IngestWorkbook
 
 BASE_PATH = os.path.dirname(__file__)
 
 HEADER_IDX_STR = 4
+
 
 def _create_single_row_worksheet(worksheet_data: dict):
     workbook = Workbook()
@@ -37,12 +39,12 @@ class WorkbookImporterTest(TestCase):
     def test_do_import(self, worksheet_importer_constructor):
         # given: set up template manager
         key_label_map = {
-            'Project': 'project',
+            'Protocol': 'protocol',
             'Cell Suspension': 'cell_suspension'
         }
 
         domain_entity_map = {
-            'project': 'project',
+            'protocol': 'protocol',
             'cell_suspension': 'biomaterial'
         }
 
@@ -69,22 +71,22 @@ class WorkbookImporterTest(TestCase):
 
         # then:
         self.assertEqual(2, len(list(workbook_output.keys())))
-        self.assertEqual(['project', 'biomaterial'], list(workbook_output.keys()))
-        self.assertEqual(2, len(list(workbook_output['project'].keys())))
-        self.assertEqual(expected_json['project'], workbook_output['project'])
+        self.assertEqual(['protocol', 'biomaterial'], list(workbook_output.keys()))
+        self.assertEqual(2, len(list(workbook_output['protocol'].keys())))
+        self.assertEqual(expected_json['protocol'], workbook_output['protocol'])
         self.assertEqual(expected_json['biomaterial'], workbook_output['biomaterial'])
 
     def _mock_get_schemas(self, ingest_workbook):
         schema_base_url = 'https://schema.humancellatlas.org'
         schema_list = [
-            f'{schema_base_url}/type/project',
+            f'{schema_base_url}/type/protocol',
             f'{schema_base_url}/type/biomaterial'
         ]
         ingest_workbook.get_schemas = MagicMock(return_value=schema_list)
         return schema_list
 
     def _mock_importable_worksheets(self, ingest_workbook, workbook):
-        project_worksheet = workbook.create_sheet('Project')
+        project_worksheet = workbook.create_sheet('Protocol')
         cell_suspension_worksheet = workbook.create_sheet('Cell Suspension')
         ingest_workbook.importable_worksheets = MagicMock(return_value=[
             project_worksheet, cell_suspension_worksheet
@@ -92,8 +94,8 @@ class WorkbookImporterTest(TestCase):
 
     def _fake_worksheet_import(self, worksheet_importer: WorksheetImporter, mock_template_manager):
         projects = {
-            'project 1': {'short_name': 'project 1', 'description': 'first project'},
-            'project 2': {'short_name': 'project 2', 'description': 'second project'}
+            'protocol 1': {'short_name': 'protocol 1', 'description': 'first protocol'},
+            'protocol 2': {'short_name': 'protocol 2', 'description': 'second protocol'}
         }
 
         cell_suspensions = {
@@ -106,7 +108,7 @@ class WorkbookImporterTest(TestCase):
         )
 
         return {
-            'project': projects,
+            'protocol': projects,
             'biomaterial': cell_suspensions
         }
 
@@ -137,7 +139,7 @@ class WorksheetImporterTest(TestCase):
         mock_template_manager = MagicMock(name='template_manager')
         mock_template_manager.create_template_node = lambda __: DataNode()
         mock_template_manager.get_converter = lambda key: converter_mapping.get(key, Converter())
-        mock_template_manager.is_parent_field_multivalue = lambda __: False
+        mock_template_manager.is_multivalue_object_field = lambda __: False
         mock_template_manager.is_identifier_field = (
             lambda header_name: True if header_name == 'project.project_core.project_shortname' else False
         )
@@ -227,7 +229,7 @@ class WorksheetImporterTest(TestCase):
             'project.genus_species.text': True,
         }
 
-        template_mgr.is_parent_field_multivalue = (
+        template_mgr.is_multivalue_object_field = (
             lambda field_name: multivalue_fields.get(field_name)
         )
 
@@ -259,7 +261,7 @@ class WorksheetImporterTest(TestCase):
 
         mock_template_manager = MagicMock(name='template_manager')
         mock_template_manager.get_converter = MagicMock(return_value=Converter())
-        mock_template_manager.is_parent_field_multivalue = MagicMock(return_value=False)
+        mock_template_manager.is_multivalue_object_field = MagicMock(return_value=False)
         mock_template_manager.is_identifier_field = (
             lambda header_name: True if header_name == 'project.short_name' else False
         )
@@ -307,7 +309,7 @@ class WorksheetImporterTest(TestCase):
 
         mock_template_manager = MagicMock(name='template_manager')
         mock_template_manager.get_converter = MagicMock(return_value=Converter())
-        mock_template_manager.is_parent_field_multivalue = MagicMock(return_value=False)
+        mock_template_manager.is_multivalue_object_field = MagicMock(return_value=False)
 
         identifier_field_map = {
             'project.short_name': True,
@@ -368,13 +370,64 @@ class WorksheetImporterTest(TestCase):
         self.assertFalse(content.get('cell_suspension_id'), 'Must not contain link field value in the content object.')
 
 
+class SubWorksheetImporterTest(TestCase):
+
+    def test_do_import(self):
+        worksheet = _create_single_row_worksheet({
+            'A': ('project.contributors.contact_name', 'Contributor Name'),
+            'B': ('project.contributors.email', 'contributor@project.ac.uk'),
+            'C': ('project.contributors.phone', '1234567')
+        })
+        mock_template_manager = MagicMock(name='template_manager')
+        mock_template_manager.get_converter = MagicMock(return_value=Converter())
+        mock_template_manager.is_multivalue_object_field = MagicMock(return_value=True)
+        node_template = DataNode()
+        node_template['describedBy'] = 'https://schemas.sample.com/test'
+        node_template['extra_field'] = 'an extra field'
+        node_template['version'] = '0.0.1'
+        mock_template_manager.create_template_node = lambda __: node_template
+
+        importer = SubWorksheetImporter()
+        rows = importer.do_import(worksheet, mock_template_manager)
+
+        self.assertEqual(1, len(rows))
+        self.assertEqual('Contributor Name', rows[0]['contact_name'])
+        self.assertEqual('contributor@project.ac.uk', rows[0]['email'])
+        self.assertEqual('1234567', rows[0]['phone'])
+
+
+class ProjectWorksheetImporterTest(TestCase):
+
+    def test_do_import(self):
+        worksheet = _create_single_row_worksheet({
+            'A': ('project.path.title', 'Project Title'),
+            'B': ('project.path.description', 'Project Description'),
+            'C': ('project.path.name', 'Project Name')
+        })
+        mock_template_manager = MagicMock(name='template_manager')
+        mock_template_manager.get_converter = MagicMock(return_value=Converter())
+        mock_template_manager.is_multivalue_object_field = MagicMock(return_value=False)
+        node_template = DataNode()
+        node_template['describedBy'] = 'https://schemas.sample.com/test'
+        node_template['extra_field'] = 'an extra field'
+        node_template['version'] = '0.0.1'
+        mock_template_manager.create_template_node = lambda __: node_template
+
+        importer = ProjectWorksheetImporter()
+        project = importer.do_import(worksheet, mock_template_manager)
+
+        self.assertEqual('Project Title', project['path']['title'])
+        self.assertEqual('Project Description', project['path']['description'])
+        self.assertEqual('Project Name', project['path']['name'])
+
+
 class IngestImporterTest(TestCase):
 
     @unittest.skip
     def test_import_spreadsheet(self):
-
+        ingest_api = IngestApi(url='http://localhost:8080')
+        submission_url = ingest_api.createSubmission(None)
         spreadsheet_file = BASE_PATH + '/metadata_spleen_new_protocols.xlsx'
-
-        submission = IngestImporter(MagicMock()).import_spreadsheet(file_path=spreadsheet_file, submission_url=None, dry_run=True)
+        submission = IngestImporter(ingest_api).import_spreadsheet(file_path=spreadsheet_file, submission_url=submission_url, dry_run=False)
 
         self.assertTrue(submission)

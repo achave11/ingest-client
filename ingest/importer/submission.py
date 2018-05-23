@@ -1,5 +1,7 @@
 import json
 
+PROJECT_ID = 'dummy-project-id'
+
 
 class IngestSubmitter(object):
 
@@ -38,13 +40,13 @@ class IngestSubmitter(object):
         for entity in entities_dictionaries.get_entities():
             submission.add_entity(entity)
 
-            for entity in entities_dictionaries.get_entities():
-                for link in entity.direct_links:
-                    to_entity = entities_dictionaries.get_entity(link['entity'], link['id'])
-                    try:
-                        submission.link_entity(entity, to_entity, relationship=link['relationship'])
-                    except Exception as link_error:
-                        print(f'a {entity.type} with {entity.id} could not be linked to {to_entity.type} with id {to_entity.id}')
+        for entity in entities_dictionaries.get_entities():
+            for link in entity.direct_links:
+                to_entity = entities_dictionaries.get_entity(link['entity'], link['id'])
+                try:
+                    submission.link_entity(entity, to_entity, relationship=link['relationship'])
+                except Exception as link_error:
+                    print(f'{str(link_error)}: a {entity.type} with {entity.id} could not be linked to {to_entity.type} with id {to_entity.id}')
 
         return submission
 
@@ -56,7 +58,7 @@ class EntityLinker(object):
         self.process_id_ctr = 0
 
     def process_links(self, entities_dictionaries):
-        for from_entity_type in ['biomaterial', 'file']:
+        for from_entity_type in entities_dictionaries.get_entity_types():
             entities_dict = entities_dictionaries.get_entities_of_type(from_entity_type)
             for from_entity_id, from_entity in entities_dict.items():
                 self._validate_entity_links(entities_dictionaries, from_entity)
@@ -65,6 +67,14 @@ class EntityLinker(object):
         return entities_dictionaries
 
     def generate_direct_links(self, entities_dictionaries, from_entity):
+        # link all entities to project
+        if not from_entity.type == 'project':
+            from_entity.direct_links.append({
+                'entity': 'project',
+                'id': 'dummy-project-id',
+                'relationship': 'projects'
+            })
+
         links_by_entity = from_entity.links_by_entity
 
         linked_biomaterial_ids = links_by_entity.get('biomaterial') if links_by_entity.get('biomaterial') else []
@@ -128,14 +138,14 @@ class EntityLinker(object):
 
         for link_entity_type, link_entity_ids in links_by_entity.items():
             for link_entity_id in link_entity_ids:
-                if not entities_dictionaries.get_entity(link_entity_type, link_entity_id):
-                    if not link_entity_type == 'process':  # it is expected that no processes are defined in any tab, these will be created later
+                if not link_entity_type == 'process':  # it is expected that no processes are defined in any tab, these will be created later
+                    if not self._is_valid_spreadsheet_link(entity.type, link_entity_type):
+                        raise InvalidLinkInSpreadsheet(entity, link_entity_type, link_entity_id)
+                    if not entities_dictionaries.get_entity(link_entity_type, link_entity_id):
+                        raise LinkedEntityNotFound(entity, link_entity_type, link_entity_id)
+                    if not entities_dictionaries.get_entity(link_entity_type, link_entity_id):
                         raise LinkedEntityNotFound(entity, link_entity_type, link_entity_id)
 
-                if not link_entity_type == 'process':
-                    to_entity = entities_dictionaries.get_entity(link_entity_type, link_entity_id)
-                    if not self._is_valid_spreadsheet_link(entity.type, to_entity.type):
-                        raise InvalidLinkInSpreadsheet(entity, to_entity)
 
                 if link_entity_type == 'process' and not len(link_entity_ids) == 1:
                     raise MultipleProcessesFound(entity, link_entity_ids)
@@ -173,7 +183,12 @@ class EntityLinker(object):
         process = Entity(
             type='process',
             id=empty_process_id,
-            content=obj
+            content=obj,
+            direct_links=[{
+                'entity': 'project',
+                'id': PROJECT_ID,
+                'relationship': 'projects'
+            }]
         )
         return process
 
@@ -199,7 +214,8 @@ class Submission(object):
         'biomaterial': 'biomaterials',
         'process': 'processes',
         'file': 'files',
-        'protocol': 'protocols'
+        'protocol': 'protocols',
+        'project': 'projects'
     }
 
     def __init__(self, ingest_api, submission_url):
@@ -219,6 +235,8 @@ class Submission(object):
         if entity.type == 'file':
             file_name = entity.content['file_core']['file_name']
             response = self.ingest_api.createFile(self.submission_url, file_name, json.dumps(entity.content))
+        elif entity.type == 'project':
+            response = self.ingest_api.createProject(self.submission_url, json.dumps(entity.content))
         else:
             response = self.ingest_api.createEntity(self.submission_url, json.dumps(entity.content), link_name)
 
@@ -289,6 +307,7 @@ class EntitiesDictionaries(object):
 
         return all_entities
 
+
 class InvalidEntityIngestLink(Exception):
 
     def __init__(self, from_entity, to_entity):
@@ -300,11 +319,12 @@ class InvalidEntityIngestLink(Exception):
 
 class InvalidLinkInSpreadsheet(Exception):
 
-    def __init__(self, from_entity, to_entity):
-        message = f'It is not possible to link a {from_entity.type} to {to_entity.type} in the spreadsheet.'
+    def __init__(self, from_entity, link_entity_type, link_entity_id):
+        message = f'It is not possible to link a {from_entity.type} to {link_entity_type} in the spreadsheet.'
         super(InvalidLinkInSpreadsheet, self).__init__(message)
         self.from_entity = from_entity
-        self.to_entity = to_entity
+        self.link_entity_type = link_entity_type
+        self.link_entity_id = link_entity_id
 
 
 class LinkedEntityNotFound(Exception):

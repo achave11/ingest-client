@@ -29,7 +29,12 @@ class IngestApi:
         self.headers = {'Content-type': 'application/json'}
 
         self.submission_links = {}
+        self.token = None
         self.load_root()
+
+
+    def set_token(self, token):
+        self.token = token
 
     def load_root(self):
         if not self.ingest_api:
@@ -201,8 +206,8 @@ class IngestApi:
     def _updateStatusToPending(self, submissionUrl):
         r = requests.patch(submissionUrl, data="{\"submissionStatus\" : \"Pending\"}", headers=self.headers)
 
-    def createProject(self, submissionUrl, jsonObject, token):
-        return self.createEntity(submissionUrl, jsonObject, "projects", token)
+    def createProject(self, submissionUrl, jsonObject):
+        return self.createEntity(submissionUrl, jsonObject, "projects", self.token)
 
     def createBiomaterial(self, submissionUrl, jsonObject):
         return self.createEntity(submissionUrl, jsonObject, "biomaterials")
@@ -244,6 +249,7 @@ class IngestApi:
                           headers=auth_headers)
         if r.status_code == requests.codes.created or r.status_code == requests.codes.accepted:
             return json.loads(r.text)
+        r.raise_for_status()
 
     # given a HCA object return the URI for the object from ingest
     def getObjectId(self, entity):

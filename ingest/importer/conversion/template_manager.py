@@ -19,6 +19,7 @@ class TemplateManager:
 
     def create_template_node(self, worksheet: Worksheet):
         concrete_entity = self.get_concrete_entity_of_tab(worksheet.title)
+
         schema = self._get_schema(concrete_entity)
         data_node = DataNode()
         data_node['describedBy'] = schema['url']
@@ -67,15 +68,15 @@ class TemplateManager:
         data_type = DataType.find(value_type)
         return data_type
 
-    def is_parent_field_multivalue(self, header_name):
-        parent_field = self._get_parent_field(header_name)
+    def is_multivalue_object_field(self, header_name):
+        parent_field = self.get_parent_field(header_name)
         column_spec = self.lookup(parent_field)
 
         return column_spec and column_spec.get('multivalue') and (
             column_spec.get('value_type') and column_spec.get('value_type') == 'object'
         )
 
-    def _get_parent_field(self, header_name):
+    def get_parent_field(self, header_name):
         try:
             match = re.search('(?P<field_chain>.*)(\.\w+)', header_name)
             parent_field = match.group('field_chain')
@@ -142,6 +143,7 @@ class TemplateManager:
             return {}
 
         return spec
+
 
 def build(schemas) -> TemplateManager:
     template = SchemaTemplate(schemas)

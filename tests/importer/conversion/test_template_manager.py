@@ -187,7 +187,7 @@ class TemplateManagerTest(TestCase):
         self.assertIsInstance(converter, ListConverter)
         self.assertEqual(DataType.BOOLEAN, converter.base_type)
 
-    def test_is_parent_field_multivalue_true(self):
+    def test_is_multivalue_object_field_true(self):
         # given:
 
         schema_template = MagicMock(name='schema_template')
@@ -199,12 +199,12 @@ class TemplateManagerTest(TestCase):
         template_manager = TemplateManager(schema_template)
 
         # when:
-        is_parent_multivalue = template_manager.is_parent_field_multivalue('path.object_list_field.subfield')
+        is_multivalue_obj = template_manager.is_multivalue_object_field('path.object_list_field.subfield')
 
         # then:
-        self.assertTrue(is_parent_multivalue)
+        self.assertTrue(is_multivalue_obj)
 
-    def test_is_parent_field_multivalue_false(self):
+    def test_is_multivalue_object_field_false(self):
         # given:
 
         schema_template = MagicMock(name='schema_template')
@@ -216,19 +216,19 @@ class TemplateManagerTest(TestCase):
         template_manager = TemplateManager(schema_template)
 
         # when:
-        is_parent_multivalue = template_manager.is_parent_field_multivalue('path.object_list_field.subfield')
+        is_parent_multivalue = template_manager.is_multivalue_object_field('path.object_list_field.subfield')
 
         # then:
         self.assertFalse(is_parent_multivalue)
 
-    def test_is_parent_field_multivalue_no_spec(self):
+    def test_is_multivalue_object_field_no_spec(self):
         # given:
         schema_template = MagicMock(name='schema_template')
         schema_template.lookup = MagicMock(name='lookup', return_value=None)
         template_manager = TemplateManager(schema_template)
 
         # when:
-        is_parent_multivalue = template_manager.is_parent_field_multivalue('path.object_list_field.subfield')
+        is_parent_multivalue = template_manager.is_multivalue_object_field('path.object_list_field.subfield')
 
         # then:
         self.assertFalse(is_parent_multivalue)
