@@ -40,12 +40,15 @@ class IngestApi:
         reply = requests.get(self.url, headers=self.headers)
         return reply.json()["_links"]
 
-    def _get_url_for_link(self, url, link_name):
-        r = requests.get(url, headers=self.headers)
-        if r.status_code == requests.codes.ok:
-            links = json.loads(r.text)["_links"]
-            if link_name in links:
-                return links[link_name]["href"]
+    def get_link_from_resource_url(self, resource_url, link_name):
+        r = requests.get(resource_url, headers=self.headers)
+        r.raise_for_status()
+        links = r.json().get('_links', {})
+        return links.get(link_name, {}).get('href')
+
+    def get_link_from_resource(self, resource, link_name):
+        links = resource.get('_links', {})
+        return links.get(link_name, {}).get('href')
 
     def get_schemas(self, latest_only=True, high_level_entity=None, domain_entity=None, concrete_entity=None):
         schema_url = self.get_schemas_url()
@@ -53,7 +56,7 @@ class IngestApi:
         filtered_schemas = {}
 
         if latest_only:
-            search_url = self._get_url_for_link(schema_url, "search")
+            search_url = self.get_link_from_resource_url(schema_url, "search")
             r = requests.get(search_url, headers=self.headers)
             if r.status_code == requests.codes.ok:
                 response_j = json.loads(r.text)
@@ -140,7 +143,7 @@ class IngestApi:
             raise ValueError("Submission Envelope " + submissionUrl + " could not be retrieved")
 
     def getSubmissionByUuid(self, submissionUuid):
-        searchByUuidLink = self._get_url_for_link(self.url + '/submissionEnvelopes/search', 'findByUuid')
+        searchByUuidLink = self.get_link_from_resource_url(self.url + '/submissionEnvelopes/search', 'findByUuid')
         searchByUuidLink = searchByUuidLink.replace('{?uuid}', '')  # TODO: use a REST traverser instead of requests?
         r = requests.get(searchByUuidLink, params={'uuid': submissionUuid})
 
@@ -289,6 +292,11 @@ class IngestApi:
 
     def createSubmissionManifest(self, submissionUrl, jsonObject):
         return self.createEntity(submissionUrl, jsonObject, 'submissionManifest')
+
+    def patch(self, manifest_url, patch):
+        r = requests.patch(manifest_url, data=json.dumps(patch))
+        r.raise_for_status()
+        return r
 
     def createSubmissionError(self, submissionUrl, jsonObject):
         return self.createEntity(submissionUrl, jsonObject, 'submissionErrors')
