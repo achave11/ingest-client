@@ -46,7 +46,14 @@ class IngestSubmitter(object):
                 try:
                     submission.link_entity(entity, to_entity, relationship=link['relationship'])
                     progress = progress + 1
+<<<<<<< Updated upstream
                     if progress == self.PROGRESS_CTR:
+=======
+                    if progress % self.PROGRESS_CTR:
+                        manifest_url = self.ingest_api.get_link_from_resource(submission.manifest, 'self')
+                        self.ingest_api.patch(manifest_url, {'actualLinks': progress })
+                        self.logger.info(f'links progress: {progress}')
+>>>>>>> Stashed changes
 
                 except Exception as link_error:
                     error_message = f'''The {entity.type} with id {entity.id} could not be 

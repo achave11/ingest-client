@@ -293,8 +293,8 @@ class IngestApi:
     def createSubmissionManifest(self, submissionUrl, jsonObject):
         return self.createEntity(submissionUrl, jsonObject, 'submissionManifest')
 
-    def patch(self, manifest_url, patch):
-        r = requests.patch(manifest_url, data=json.dumps(patch))
+    def patch(self, url, patch):
+        r = requests.patch(url, data=json.dumps(patch))
         r.raise_for_status()
         return r
 
@@ -319,9 +319,8 @@ class IngestApi:
         }
 
         r = requests.post(fileSubmissionsUrl, data=json.dumps(fileToCreateObject), headers=self.headers)
-        if r.status_code == requests.codes.created or r.status_code == requests.codes.accepted:
-            return r.json()
-        raise ValueError('Create file failed: File ' + file_name + " - " + r.text)
+        r.raise_for_status()
+        return r.json()
 
     def createEntity(self, submissionUrl, jsonObject, entityType, token=None):
         auth_headers = {'Content-type': 'application/json',
