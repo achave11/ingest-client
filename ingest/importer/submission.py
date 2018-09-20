@@ -46,10 +46,11 @@ class IngestSubmitter(object):
                 try:
                     submission.link_entity(entity, to_entity, relationship=link['relationship'])
                     progress = progress + 1
-
-                    if progress % self.PROGRESS_CTR:
+                    self.logger.info(f'links progress: {progress}')
+                    self.logger.info(f"{submission.manifest['expectedLinks']}")
+                    if progress % self.PROGRESS_CTR or (progress == int(submission.manifest['expectedLinks'])):
                         manifest_url = self.ingest_api.get_link_from_resource(submission.manifest, 'self')
-                        self.ingest_api.patch(manifest_url, {'actualLinks': progress })
+                        self.ingest_api.patch(manifest_url, {'actualLinks': progress})
                         self.logger.info(f'links progress: {progress}')
 
                 except Exception as link_error:
@@ -330,6 +331,7 @@ class Submission(object):
 
         self.manifest = self.ingest_api.createSubmissionManifest(self.submission_url, manifest_json)
         return self.manifest
+
 
 class EntityMap(object):
 
